@@ -1,6 +1,7 @@
 package bguspl.set.ex;
 
 import bguspl.set.Env;
+import bguspl.set.UserInterfaceImpl;
 
 import java.util.List;
 import java.util.Random;
@@ -77,9 +78,11 @@ public class Dealer implements Runnable {
      * The inner loop of the dealer thread that runs as long as the countdown did not time out.
      */
     private void timerLoop() {
+        reshuffleTime = System.currentTimeMillis()+60000;
+        env.ui.setCountdown(env.config.turnTimeoutMillis,false);
         while (!terminate && System.currentTimeMillis() < reshuffleTime) {
+            updateTimerDisplay(reshuffleTime - System.currentTimeMillis()<env.config.turnTimeoutWarningMillis);
             sleepUntilWokenOrTimeout();
-            updateTimerDisplay(false);
 //            removeCardsFromTable();
 //            placeCardsOnTable();
         }
@@ -119,6 +122,7 @@ public class Dealer implements Runnable {
                 Random rand = new Random();
                 int rnd = rand.nextInt(deck.size());
                 table.placeCard(deck.get(rnd), i);
+                env.ui.placeCard(deck.get(rnd),i);
                 deck.remove(rnd);
             }
         }
@@ -128,14 +132,19 @@ public class Dealer implements Runnable {
      * Sleep for a fixed amount of time or until the thread is awakened for some purpose.
      */
     private void sleepUntilWokenOrTimeout() {
-        // TODO implement
+       int tosleep=1000;
+       if (reshuffleTime - System.currentTimeMillis() < env.config.turnTimeoutMillis)
+           tosleep=20;
+        try{
+           Thread.sleep(tosleep);
+      } catch (InterruptedException e){};
     }
 
     /**
      * Reset and/or update the countdown and the countdown display.
      */
     private void updateTimerDisplay(boolean reset) {
-        // TODO implement
+        env.ui.setCountdown(reshuffleTime - System.currentTimeMillis(),reset);
     }
 
     /**
@@ -147,14 +156,17 @@ public class Dealer implements Runnable {
                 int card = table.slotToCard[i];
                 table.removeCard(i);
                 deck.add(card);
+                env.ui.removeTokens(i);
+                env.ui.removeCard(i);
                 //update UI
-                for (int j=0;j< players.length;j++) {
-                    if (players[j].gettokensplaced().contains(i)) //checking if the player has a token on the slot
-                        players[j].gettokensplaced().remove(i); // returning the token to the player
+                for (Player p : table.tokensonslot[i]) { //removing the token on slot i from players queue
+                    p.gettokensplaced().remove(i);
                 }
+                table.tokensonslot[i] = null; // cleaning the slot in table tokens on slot from tokens
             }
         }
-    }
+
+        }
 
     /**
      * Check who is/are the winner/s and displays them.

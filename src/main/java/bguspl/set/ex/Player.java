@@ -137,16 +137,20 @@ public class Player implements Runnable {
             if (tokensplaced.contains(slot)) {
                 tokensplaced.remove((Object) slot);
                 table.tokensonslot[slot].remove(this);
+                env.ui.removeToken(this.id,slot);
+
             }
             else {
                 tokensplaced.add(slot); //adding to the queue of the player tokens
                 table.tokensonslot[slot].add(this); // adding the player to the table list of tokens placed on slots
+                env.ui.placeToken(this.id,slot);
 //                if (tokensplaced.size()==3) //todo dealer examine method of the set
             }
         }
         else if (tokensplaced.size() == 3 && tokensplaced.contains(slot)) {
             tokensplaced.remove((Object) slot);
             table.tokensonslot[slot].remove(this);
+            env.ui.removeToken(this.id,slot);
         }
     }
 

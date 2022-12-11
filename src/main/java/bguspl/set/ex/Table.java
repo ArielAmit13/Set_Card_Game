@@ -41,7 +41,10 @@ public class Table {
         this.env = env;
         this.slotToCard = slotToCard;
         this.cardToSlot = cardToSlot;
-        tokensonslot = new ArrayList[slotToCard.length];
+        this.tokensonslot = new ArrayList[slotToCard.length];
+        for (int i = 0; i < slotToCard.length; i++) {
+            tokensonslot[i] = new ArrayList<Player>();
+        }
     }
 
     /**
