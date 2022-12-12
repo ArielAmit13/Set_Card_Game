@@ -42,11 +42,14 @@ public class Dealer implements Runnable {
      */
     private long reshuffleTime = Long.MAX_VALUE;
 
+    private Thread[] threads;
+
     public Dealer(Env env, Table table, Player[] players) {
         this.env = env;
         this.table = table;
         this.players = players;
         deck = IntStream.range(0, env.config.deckSize).boxed().collect(Collectors.toList());
+        threads = new Thread[players.length];
     }
 
     /**
@@ -55,7 +58,6 @@ public class Dealer implements Runnable {
     @Override
     public void run() {
         env.logger.log(Level.INFO, "Thread " + Thread.currentThread().getName() + " starting.");
-        Thread[] threads = new Thread[players.length];
         boolean canstart=false;
         do {
             placeCardsOnTable();
@@ -83,11 +85,34 @@ public class Dealer implements Runnable {
         while (!terminate && System.currentTimeMillis() < reshuffleTime) {
             updateTimerDisplay(reshuffleTime - System.currentTimeMillis()<env.config.turnTimeoutWarningMillis);
             sleepUntilWokenOrTimeout();
-//            removeCardsFromTable();
-//            placeCardsOnTable();
         }
     }
-    public void  examine(int[]cards , int id) {
+    public synchronized void examine(int[] cards, int id) { //handle the test of the set and its outcomes
+        // we want one set check at a time
+//        try {
+//            threads[id].wait();
+//        } catch (InterruptedException e){};
+        boolean isSet = env.util.testSet(cards);
+        if (isSet) {
+            players[id].point(); //up score by 1 point
+            removeCardsFromTable(cards); //removing the three cards of the set
+            placeCardsOnTable();
+            //need to set player to sleep for one second
+//                threads[id].interrupt();
+                env.ui.setFreeze(id, env.config.pointFreezeMillis);
+                players[id].penalty(env.config.pointFreezeMillis);
+
+        } else {
+            //need to freeze for 3 sec
+//               threads[id].interrupt();
+                env.ui.setFreeze(id, env.config.penaltyFreezeMillis);
+                players[id].penalty(env.config.penaltyFreezeMillis);
+        }
+
+        if (isSet) {
+            reshuffleTime = System.currentTimeMillis() + 60000;
+            env.ui.setCountdown(env.config.turnTimeoutMillis, false);
+        }
     }
 
     /**
@@ -109,10 +134,18 @@ public class Dealer implements Runnable {
     /**
      * Checks cards should be removed from the table and removes them.
      */
-    private void removeCardsFromTable() {
-        // TODO implement
+    private void removeCardsFromTable(int [] cards) {
+        for (int i = 0; i < cards.length; i++) {
+            int slot = table.cardToSlot[cards[i]];
+            table.removeCard(slot);
+            env.ui.removeTokens(slot);
+            env.ui.removeCard(slot);
+            for (Player p : table.tokensonslot[slot]) { //removing the token on slot i from players queue
+                p.gettokensplaced().remove((Object)slot);
+            }
+            table.tokensonslot[slot].clear();
+        }
     }
-
     /**
      * Check if any cards can be removed from the deck and placed on the table.
      */
@@ -160,9 +193,9 @@ public class Dealer implements Runnable {
                 env.ui.removeCard(i);
                 //update UI
                 for (Player p : table.tokensonslot[i]) { //removing the token on slot i from players queue
-                    p.gettokensplaced().remove(i);
+                      p.gettokensplaced().remove((Object)i);
                 }
-                table.tokensonslot[i] = null; // cleaning the slot in table tokens on slot from tokens
+                table.tokensonslot[i].clear(); // cleaning the slot in table tokens on slot from tokens
             }
         }
 
@@ -172,6 +205,10 @@ public class Dealer implements Runnable {
      * Check who is/are the winner/s and displays them.
      */
     private void announceWinners() {
-        // TODO implement
+        int[]playersId = new int[players.length];
+        for (int i=0; i<players.length;i++) {
+            playersId[i] = players[i].id;
+        }
+        env.ui.announceWinner(playersId);
     }
 }

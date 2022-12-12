@@ -2,6 +2,7 @@ package bguspl.set.ex;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Queue;
 import java.util.Random;
 import java.util.logging.Level;
 
@@ -59,6 +60,12 @@ public class Player implements Runnable {
 
     private List<Integer> tokensplaced;
 
+    private boolean keyBlock;
+
+    private int slotPressed;
+
+    private Queue<Integer> inputpresses;
+
     /**
      * The class constructor.
      *
@@ -75,6 +82,8 @@ public class Player implements Runnable {
         this.human = human;
         this.dealer = dealer;
         this.tokensplaced = new LinkedList<Integer>();
+        this.keyBlock = false;
+        inputpresses = new LinkedList<>();
     }
 
     /**
@@ -87,9 +96,16 @@ public class Player implements Runnable {
         if (!human) createArtificialIntelligence();
 
         while (!terminate) {
-            // TODO implement main player loop
+            if (!inputpresses.isEmpty()) {
+                int slot = inputpresses.poll();
+                handleKeyPress(slot);
+            }
+
         }
-        if (!human) try { aiThread.join(); } catch (InterruptedException ignored) {}
+        if (!human) try {
+            aiThread.join();
+        } catch (InterruptedException ignored) {
+        }
         env.logger.log(Level.INFO, "Thread " + Thread.currentThread().getName() + " terminated.");
     }
 
@@ -103,20 +119,24 @@ public class Player implements Runnable {
             env.logger.log(Level.INFO, "Thread " + Thread.currentThread().getName() + " starting.");
             while (!terminate) {
 
-                    Random rand = new Random();
-                    int rndslot = rand.nextInt(12);
-                    keyPressed(rndslot);
+                Random rand = new Random();
+                int rndslot = rand.nextInt(12);
+                keyPressed(rndslot);
 
                 //need to wait when queue size is 3
                 try {
-                    synchronized (this) { wait(); }
-                } catch (InterruptedException ignored) {}
+                    synchronized (this) {
+                        wait();
+                    }
+                } catch (InterruptedException ignored) {
+                }
             }
             env.logger.log(Level.INFO, "Thread " + Thread.currentThread().getName() + " terminated.");
         }, "computer-" + id);
         aiThread.start();
     }
-    public List gettokensplaced () {
+
+    public List gettokensplaced() {
         return tokensplaced;
     }
 
@@ -133,24 +153,36 @@ public class Player implements Runnable {
      * @param slot - the slot corresponding to the key pressed.
      */
     public void keyPressed(int slot) {
+     if (inputpresses.size()<3 && !keyBlock) {
+         inputpresses.add(slot);
+     }
+    }
+
+    private void handleKeyPress(int slot) {
         if (tokensplaced.size() < 3) {
             if (tokensplaced.contains(slot)) {
                 tokensplaced.remove((Object) slot);
                 table.tokensonslot[slot].remove(this);
-                env.ui.removeToken(this.id,slot);
+                env.ui.removeToken(this.id, slot);
 
-            }
-            else {
+            } else {
                 tokensplaced.add(slot); //adding to the queue of the player tokens
                 table.tokensonslot[slot].add(this); // adding the player to the table list of tokens placed on slots
-                env.ui.placeToken(this.id,slot);
-//                if (tokensplaced.size()==3) //todo dealer examine method of the set
+                env.ui.placeToken(this.id, slot);
+                if (tokensplaced.size() == 3) {
+                    int[] cards = new int[3];
+                    for (int i = 0; i < cards.length; i++) {
+                        cards[i] = table.slotToCard[tokensplaced.get(i)];
+                    }
+                    keyBlock = true;
+                    dealer.examine(cards, id);
+                    keyBlock = false;
+                }
             }
-        }
-        else if (tokensplaced.size() == 3 && tokensplaced.contains(slot)) {
+        } else if (tokensplaced.size() == 3 && tokensplaced.contains(slot)) {
             tokensplaced.remove((Object) slot);
             table.tokensonslot[slot].remove(this);
-            env.ui.removeToken(this.id,slot);
+            env.ui.removeToken(this.id, slot);
         }
     }
 
@@ -161,8 +193,6 @@ public class Player implements Runnable {
      * @post - the player's score is updated in the ui.
      */
     public void point() {
-        // TODO implement
-
         int ignored = table.countCards(); // this part is just for demonstration in the unit tests
         env.ui.setScore(id, ++score);
     }
@@ -170,9 +200,13 @@ public class Player implements Runnable {
     /**
      * Penalize a player and perform other related actions.
      */
-    public void penalty() {
-        // TODO implement
+    public void penalty(long sleeptime) {
+        try {
+            Thread.sleep(sleeptime);
+        } catch (InterruptedException e){
+        };
     }
+
 
     public int getScore() {
         return score;
