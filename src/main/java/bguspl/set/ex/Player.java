@@ -66,6 +66,8 @@ public class Player implements Runnable {
 
     private Queue<Integer> inputpresses;
 
+    private long sleeptime;
+
     /**
      * The class constructor.
      *
@@ -94,13 +96,17 @@ public class Player implements Runnable {
         playerThread = Thread.currentThread();
         env.logger.log(Level.INFO, "Thread " + Thread.currentThread().getName() + "starting.");
         if (!human) createArtificialIntelligence();
-
         while (!terminate) {
+            if(sleeptime==3000) {
+               System.out.println(Thread.currentThread());
+                penalty();
+            }
+            else if (sleeptime==1000)
+                point();
             if (!inputpresses.isEmpty()) {
                 int slot = inputpresses.poll();
                 handleKeyPress(slot);
             }
-
         }
         if (!human) try {
             aiThread.join();
@@ -118,12 +124,17 @@ public class Player implements Runnable {
         aiThread = new Thread(() -> {
             env.logger.log(Level.INFO, "Thread " + Thread.currentThread().getName() + " starting.");
             while (!terminate) {
-
+                if(sleeptime==3000)
+                    penalty();
+                else if (sleeptime==1000)
+                    point();
                 Random rand = new Random();
                 int rndslot = rand.nextInt(12);
                 keyPressed(rndslot);
-
-                //need to wait when queue size is 3
+                if (!inputpresses.isEmpty()) {
+                    int slot = inputpresses.poll();
+                    handleKeyPress(slot);
+                }
                 try {
                     synchronized (this) {
                         wait();
@@ -175,8 +186,7 @@ public class Player implements Runnable {
                         cards[i] = table.slotToCard[tokensplaced.get(i)];
                     }
                     keyBlock = true;
-                    dealer.examine(cards, id);
-                    keyBlock = false;
+                    dealer.HandleTest(cards, id);
                 }
             }
         } else if (tokensplaced.size() == 3 && tokensplaced.contains(slot)) {
@@ -195,17 +205,34 @@ public class Player implements Runnable {
     public void point() {
         int ignored = table.countCards(); // this part is just for demonstration in the unit tests
         env.ui.setScore(id, ++score);
+//        try {
+//            Thread.sleep(env.config.pointFreezeMillis);
+//        }catch (InterruptedException e){};
+        long freezetime = System.currentTimeMillis() + env.config.pointFreezeMillis+1000;
+        while (System.currentTimeMillis() <= freezetime) {
+            env.ui.setFreeze(id, freezetime - System.currentTimeMillis());
+        }
+        sleeptime = 0;
+        keyBlock=false;
     }
 
     /**
      * Penalize a player and perform other related actions.
      */
-    public void penalty(long sleeptime) {
-        try {
-            Thread.sleep(sleeptime);
-        } catch (InterruptedException e){
-        };
+    public void penalty() {
+//        try {
+//            Thread.sleep(env.config.penaltyFreezeMillis);
+//        }catch (InterruptedException e){};
+        long freezetime = System.currentTimeMillis() + env.config.penaltyFreezeMillis+1000;
+        while (System.currentTimeMillis() <= freezetime) {
+            env.ui.setFreeze(id, freezetime - System.currentTimeMillis());
+        }
+        sleeptime = 0;
+        keyBlock=false;
     }
+     public void SetSleep(long sleeptime) {
+         this.sleeptime = sleeptime;
+     }
 
 
     public int getScore() {

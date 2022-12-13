@@ -3,7 +3,9 @@ package bguspl.set.ex;
 import bguspl.set.Env;
 import bguspl.set.UserInterfaceImpl;
 
+import java.util.LinkedList;
 import java.util.List;
+import java.util.Queue;
 import java.util.Random;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -44,12 +46,15 @@ public class Dealer implements Runnable {
 
     private Thread[] threads;
 
+    private Queue<Integer[]> SetsToTest;
+
     public Dealer(Env env, Table table, Player[] players) {
         this.env = env;
         this.table = table;
         this.players = players;
         deck = IntStream.range(0, env.config.deckSize).boxed().collect(Collectors.toList());
         threads = new Thread[players.length];
+        SetsToTest = new LinkedList<>();
     }
 
     /**
@@ -80,33 +85,40 @@ public class Dealer implements Runnable {
      * The inner loop of the dealer thread that runs as long as the countdown did not time out.
      */
     private void timerLoop() {
-        reshuffleTime = System.currentTimeMillis()+60000;
+        reshuffleTime = System.currentTimeMillis()+env.config.turnTimeoutMillis;
         env.ui.setCountdown(env.config.turnTimeoutMillis,false);
         while (!terminate && System.currentTimeMillis() < reshuffleTime) {
             updateTimerDisplay(reshuffleTime - System.currentTimeMillis()<env.config.turnTimeoutWarningMillis);
             sleepUntilWokenOrTimeout();
+            if (!SetsToTest.isEmpty()) {
+                examine(SetsToTest.poll());
+            }
+
         }
     }
-    public synchronized void examine(int[] cards, int id) { //handle the test of the set and its outcomes
-        // we want one set check at a time
-//        try {
-//            threads[id].wait();
-//        } catch (InterruptedException e){};
+    public synchronized void HandleTest (int[] cards, int id) { // queue of sets to test by dealer
+        Integer[] Set = new Integer[4];
+        Set[0] = id;
+        for (int i=1;i<Set.length;i++) {
+            Set[i] = cards[i-1];
+        }
+        SetsToTest.add(Set);
+        notifyAll();
+    }
+    private void examine(Integer[] Set) { //handle the test of the set and its outcomes
+        int playerid = Set[0];
+        int[] cards = new int[3];
+        for (int i=0;i<cards.length;i++) {
+            cards[i]=Set[i+1];
+        }
         boolean isSet = env.util.testSet(cards);
         if (isSet) {
-            players[id].point(); //up score by 1 point
             removeCardsFromTable(cards); //removing the three cards of the set
             placeCardsOnTable();
-            //need to set player to sleep for one second
-//                threads[id].interrupt();
-                env.ui.setFreeze(id, env.config.pointFreezeMillis);
-                players[id].penalty(env.config.pointFreezeMillis);
+            players[playerid].SetSleep(env.config.pointFreezeMillis);
 
         } else {
-            //need to freeze for 3 sec
-//               threads[id].interrupt();
-                env.ui.setFreeze(id, env.config.penaltyFreezeMillis);
-                players[id].penalty(env.config.penaltyFreezeMillis);
+                players[playerid].SetSleep(env.config.penaltyFreezeMillis);
         }
 
         if (isSet) {
@@ -141,6 +153,9 @@ public class Dealer implements Runnable {
             env.ui.removeTokens(slot);
             env.ui.removeCard(slot);
             for (Player p : table.tokensonslot[slot]) { //removing the token on slot i from players queue
+                for (Integer[] Set: SetsToTest) { // if the player sent a set to test with this card, we remove the set from the queue
+                    if(Set[0]==p.id) SetsToTest.remove(Set);
+                }
                 p.gettokensplaced().remove((Object)slot);
             }
             table.tokensonslot[slot].clear();
@@ -191,7 +206,6 @@ public class Dealer implements Runnable {
                 deck.add(card);
                 env.ui.removeTokens(i);
                 env.ui.removeCard(i);
-                //update UI
                 for (Player p : table.tokensonslot[i]) { //removing the token on slot i from players queue
                       p.gettokensplaced().remove((Object)i);
                 }
