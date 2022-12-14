@@ -158,6 +158,10 @@ public class Dealer implements Runnable {
                 }
                 p.gettokensplaced().remove((Object)slot);
             }
+            for (int j=0;j<players.length;i++) {
+                if (players[j].getInputPresses().contains(slot))
+                    players[j].getInputPresses().remove(slot);
+            }
             table.tokensonslot[slot].clear();
         }
     }
@@ -166,26 +170,28 @@ public class Dealer implements Runnable {
      */
     private void placeCardsOnTable() {
         for (int i=0;i<12;i++) {
-            if(table.slotToCard[i]==null && !(deck.isEmpty())) {
+            if (table.slotToCard[i] == null && !(deck.isEmpty())) {
                 Random rand = new Random();
                 int rnd = rand.nextInt(deck.size());
                 table.placeCard(deck.get(rnd), i);
-                env.ui.placeCard(deck.get(rnd),i);
+                env.ui.placeCard(deck.get(rnd), i);
                 deck.remove(rnd);
             }
+
         }
     }
 
     /**
      * Sleep for a fixed amount of time or until the thread is awakened for some purpose.
      */
-    private void sleepUntilWokenOrTimeout() {
-       int tosleep=1000;
+    private synchronized void sleepUntilWokenOrTimeout() {
+       int towait=1000;
        if (reshuffleTime - System.currentTimeMillis() < env.config.turnTimeoutMillis)
-           tosleep=20;
-        try{
-           Thread.sleep(tosleep);
-      } catch (InterruptedException e){};
+           towait=20;
+        try {
+            wait(towait);
+        }catch (InterruptedException e){};
+
     }
 
     /**
@@ -210,6 +216,10 @@ public class Dealer implements Runnable {
                       p.gettokensplaced().remove((Object)i);
                 }
                 table.tokensonslot[i].clear(); // cleaning the slot in table tokens on slot from tokens
+            }
+            for (int j=0;j<players.length;i++) {
+                if (players[j].getInputPresses().contains(i))
+                    players[j].getInputPresses().remove(i);
             }
         }
 

@@ -4,6 +4,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
 import java.util.Random;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.logging.Level;
 
 import bguspl.set.Env;
@@ -64,7 +66,7 @@ public class Player implements Runnable {
 
     private int slotPressed;
 
-    private Queue<Integer> inputpresses;
+    private BlockingQueue<Integer> inputpresses;
 
     private long sleeptime;
 
@@ -85,7 +87,7 @@ public class Player implements Runnable {
         this.dealer = dealer;
         this.tokensplaced = new LinkedList<Integer>();
         this.keyBlock = false;
-        inputpresses = new LinkedList<>();
+        inputpresses = new LinkedBlockingQueue<>();
     }
 
     /**
@@ -124,20 +126,12 @@ public class Player implements Runnable {
         aiThread = new Thread(() -> {
             env.logger.log(Level.INFO, "Thread " + Thread.currentThread().getName() + " starting.");
             while (!terminate) {
-                if(sleeptime==3000)
-                    penalty();
-                else if (sleeptime==1000)
-                    point();
                 Random rand = new Random();
                 int rndslot = rand.nextInt(12);
                 keyPressed(rndslot);
-                if (!inputpresses.isEmpty()) {
-                    int slot = inputpresses.poll();
-                    handleKeyPress(slot);
-                }
                 try {
                     synchronized (this) {
-                        wait();
+                        wait(1000);
                     }
                 } catch (InterruptedException ignored) {
                 }
@@ -164,7 +158,7 @@ public class Player implements Runnable {
      * @param slot - the slot corresponding to the key pressed.
      */
     public void keyPressed(int slot) {
-     if (inputpresses.size()<3 && !keyBlock) {
+     if (inputpresses.size()<3 && !keyBlock && table.slotToCard[slot]!=null ) {
          inputpresses.add(slot);
      }
     }
@@ -176,7 +170,9 @@ public class Player implements Runnable {
                 table.tokensonslot[slot].remove(this);
                 env.ui.removeToken(this.id, slot);
 
-            } else {
+            }
+            else {
+               if(table.slotToCard[slot]!=null) { //checking that there is a card on this slot at the moment
                 tokensplaced.add(slot); //adding to the queue of the player tokens
                 table.tokensonslot[slot].add(this); // adding the player to the table list of tokens placed on slots
                 env.ui.placeToken(this.id, slot);
@@ -189,7 +185,9 @@ public class Player implements Runnable {
                     dealer.HandleTest(cards, id);
                 }
             }
-        } else if (tokensplaced.size() == 3 && tokensplaced.contains(slot)) {
+            }
+        }
+        else if (tokensplaced.size() == 3 && tokensplaced.contains(slot)) {
             tokensplaced.remove((Object) slot);
             table.tokensonslot[slot].remove(this);
             env.ui.removeToken(this.id, slot);
@@ -205,9 +203,6 @@ public class Player implements Runnable {
     public void point() {
         int ignored = table.countCards(); // this part is just for demonstration in the unit tests
         env.ui.setScore(id, ++score);
-//        try {
-//            Thread.sleep(env.config.pointFreezeMillis);
-//        }catch (InterruptedException e){};
         long freezetime = System.currentTimeMillis() + env.config.pointFreezeMillis+1000;
         while (System.currentTimeMillis() <= freezetime) {
             env.ui.setFreeze(id, freezetime - System.currentTimeMillis());
@@ -220,9 +215,6 @@ public class Player implements Runnable {
      * Penalize a player and perform other related actions.
      */
     public void penalty() {
-//        try {
-//            Thread.sleep(env.config.penaltyFreezeMillis);
-//        }catch (InterruptedException e){};
         long freezetime = System.currentTimeMillis() + env.config.penaltyFreezeMillis+1000;
         while (System.currentTimeMillis() <= freezetime) {
             env.ui.setFreeze(id, freezetime - System.currentTimeMillis());
@@ -238,4 +230,8 @@ public class Player implements Runnable {
     public int getScore() {
         return score;
     }
+    public Queue getInputPresses () {
+        return inputpresses;
+    }
+
 }
